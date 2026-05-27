@@ -68,7 +68,7 @@ static class Program
             {
                 if (defaultMic != null)
                 {
-                    defaultMic.AudioEndpointVolume.MasterVolumeLevelScalar = 0.8f;
+                    defaultMic.AudioEndpointVolume.MasterVolumeLevelScalar = 0.805f;
                 }
             });
             contextMenu.Items.Add(resetItem);
