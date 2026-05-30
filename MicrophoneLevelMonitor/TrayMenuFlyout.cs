@@ -17,6 +17,9 @@ namespace MicrophoneLevelMonitor;
 internal sealed class TrayMenuFlyout : Window
 {
     private const double MenuWidth = 178;
+    private const double MenuItemHeight = 26;
+    private const double HorizontalOffset = -22;
+    private const double VerticalOffset = -22;
     private const double ScreenMargin = 8;
     private bool isClosing;
 
@@ -56,7 +59,7 @@ internal sealed class TrayMenuFlyout : Window
         var width = ActualWidth > 0 ? ActualWidth : MenuWidth;
         var height = ActualHeight;
 
-        var x = Math.Clamp(cursor.X - width + 36, workingArea.Left + ScreenMargin, workingArea.Right - width - ScreenMargin);
+        var x = GetHorizontalPosition(workingArea, cursor, width);
         var y = GetVerticalPosition(workingArea, cursor, height);
 
         Left = x;
@@ -108,7 +111,7 @@ internal sealed class TrayMenuFlyout : Window
                 VerticalAlignment = VerticalAlignment.Center
             },
             Cursor = System.Windows.Input.Cursors.Hand,
-            Height = 30,
+            Height = MenuItemHeight,
             HorizontalContentAlignment = System.Windows.HorizontalAlignment.Stretch,
             Padding = new Thickness(10, 0, 10, 0)
         };
@@ -199,14 +202,23 @@ internal sealed class TrayMenuFlyout : Window
         {
             Background = palette.Separator,
             Height = 1,
-            Margin = new Thickness(8, 4, 8, 4)
+            Margin = new Thickness(8, 3, 8, 3)
         };
     }
 
     private double GetVerticalPosition(Rect workingArea, WpfPoint cursor, double height)
     {
-        var y = cursor.Y - height - ScreenMargin;
+        var y = cursor.Y - height - ScreenMargin + VerticalOffset;
         return Math.Clamp(y, workingArea.Top + ScreenMargin, workingArea.Bottom - height - ScreenMargin);
+    }
+
+    private static double GetHorizontalPosition(Rect workingArea, WpfPoint cursor, double width)
+    {
+        var leftEdge = cursor.X + HorizontalOffset;
+        var minLeft = workingArea.Left + ScreenMargin;
+        var maxLeft = workingArea.Right - width - ScreenMargin;
+
+        return Math.Clamp(leftEdge, minLeft, maxLeft);
     }
 
     private Rect ToDeviceIndependentRect(System.Drawing.Rectangle rectangle)
