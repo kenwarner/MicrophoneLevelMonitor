@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Microphone Level Monitor icon</title>
+  <desc id="desc">A simple microphone outline with watchful eyes.</desc>
+
+  <g fill="none" stroke="#F8FAFC" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="75" y="8" width="106" height="160" rx="53" stroke-width="14"/>
+    <path d="M47 110c0 57 36 94 81 94s81-37 81-94" stroke-width="14"/>
+    <path d="M128 204v36" stroke-width="14"/>
+    <path d="M88 240h80" stroke-width="14"/>
+  </g>
+
+  <g>
+    <ellipse cx="117" cy="70" rx="20" ry="25" fill="#F8FAFC"/>
+    <ellipse cx="139" cy="70" rx="20" ry="25" fill="#F8FAFC"/>
+    <circle cx="122" cy="76" r="8" fill="#111827"/>
+    <circle cx="134" cy="76" r="8" fill="#111827"/>
+  </g>
+
+  <path d="M107 120c10 10 32 10 42 0" fill="none" stroke="#F8FAFC" stroke-width="9" stroke-linecap="round"/>
+
+</svg>

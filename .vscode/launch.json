@@ -1,0 +1,21 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug",
+      "type": "dotnet",
+      "request": "launch",
+      "projectPath": "${workspaceFolder}/MicrophoneLevelMonitor/MicrophoneLevelMonitor.csproj",
+      "logging": {
+        "moduleLoad": false
+      }
+    },
+    {
+      "name": "Installer",
+      "type": "node-terminal",
+      "request": "launch",
+      "preLaunchTask": "build installer",
+      "command": "echo Installer build complete."
+    }
+  ]
+}

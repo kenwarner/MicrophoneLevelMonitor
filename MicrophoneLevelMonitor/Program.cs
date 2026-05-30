@@ -1,25 +1,44 @@
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using Forms = System.Windows.Forms; // Alias WinForms
+using Forms = System.Windows.Forms;
 using NAudio.CoreAudioApi;
 
 namespace MicrophoneLevelMonitor;
 
 static class Program
 {
+    private const string AppMutexName = "MicrophoneLevelMonitor-AF648ED7-1F0E-4A2B-B919-8521846E83A1";
+    private const string AppUserModelId = "MicrophoneLevelMonitor";
+    private const string NotificationTitle = "Mic Check!";
+    private const int PollIntervalMilliseconds = 5 * 1000;
+    private const int LowVolumeReminderMilliseconds = 30 * 1000;
+    private const float LowVolumeThresholdPercent = 75f;
+    private const float ResetVolumeScalar = 0.805f;
+
     private static float? previousVolume;
     private static DateTime previousVolumeChangeTimestamp;
 
-    private static NotifyIcon notifyIcon;
-    private static MMDevice defaultMic;
+    private static NotifyIcon? notifyIcon;
+    private static MMDeviceEnumerator? enumerator;
+    private static MMDevice? defaultMic;
+    private static string? defaultMicId;
+    private static Icon? appIcon;
+    private static Icon? ownedTrayIcon;
+    private static TrayMenuFlyout? trayMenuFlyout;
+    private static AppSettings appSettings = new();
 
     [DllImport("shell32.dll", SetLastError = true)]
-    static extern void SetCurrentProcessExplicitAppUserModelID([MarshalAs(UnmanagedType.LPWStr)] string AppID);
+    private static extern void SetCurrentProcessExplicitAppUserModelID([MarshalAs(UnmanagedType.LPWStr)] string appId);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DestroyIcon(IntPtr hIcon);
 
     /// <summary>
     ///  The main entry point for the application.
@@ -27,8 +46,14 @@ static class Program
     [STAThread]
     static void Main()
     {
+        using var appMutex = new Mutex(initiallyOwned: true, AppMutexName, out var createdNew);
+        if (!createdNew)
+        {
+            return;
+        }
+
         // this has to come first
-        SetCurrentProcessExplicitAppUserModelID("Mic Check!");
+        SetCurrentProcessExplicitAppUserModelID(AppUserModelId);
 
         // To customize application configuration such as set high DPI settings or default font,
         // see https://aka.ms/applicationconfiguration.
@@ -36,175 +61,341 @@ static class Program
 
         Forms.Application.EnableVisualStyles();
         Forms.Application.SetCompatibleTextRenderingDefault(false);
+        appSettings = LoadAppSettings();
 
-        // Create a hidden form just to keep the application running
-        using (var form = new Form { WindowState = FormWindowState.Minimized, ShowInTaskbar = false })
+        using var form = new Forms.Form { WindowState = FormWindowState.Minimized, ShowInTaskbar = false };
+        using var contextMenu = CreateLegacyContextMenu();
+        using var timer = new Forms.Timer { Interval = PollIntervalMilliseconds };
+
+        form.Load += (sender, args) =>
         {
-            form.Load += (sender, args) =>
-            {
-                form.Visible = false;
-                form.ShowInTaskbar = false;
-            };
+            form.Visible = false;
+            form.ShowInTaskbar = false;
+        };
 
-            notifyIcon = new NotifyIcon
-            {
-                Visible = true,
-                Text = ""
-            };
+        notifyIcon = new NotifyIcon
+        {
+            Icon = appIcon = CreateAppIcon(),
+            Visible = true,
+            Text = "Microphone Level Monitor"
+        };
 
-            // Add a context menu
-            var contextMenu = new ContextMenuStrip();
-
-            // Add a context menu item to exit the application
-            var exitItem = new ToolStripMenuItem("Exit", null, (s, e) =>
-            {
-                notifyIcon.Visible = false;
-                Forms.Application.Exit();
-            });
-            contextMenu.Items.Add(exitItem);
-
-            // Add a context menu item to reset the volume
-            var resetItem = new ToolStripMenuItem("80%", null, (s, e) =>
-            {
-                if (defaultMic != null)
-                {
-                    defaultMic.AudioEndpointVolume.MasterVolumeLevelScalar = 0.805f;
-                }
-            });
-            contextMenu.Items.Add(resetItem);
-
-            // set the context menu
+        if (appSettings.UseModernTrayMenu)
+        {
+            notifyIcon.MouseUp += NotifyIcon_MouseUp;
+        }
+        else
+        {
             notifyIcon.ContextMenuStrip = contextMenu;
+            notifyIcon.DoubleClick += (sender, args) => OpenSoundSettings();
+        }
 
-            // Handle the DoubleClick event to open sound settings
-            notifyIcon.DoubleClick += (sender, args) =>
-            {
-                try
-                {
-                    // Modern sound settings (Windows 10+)
-                    Process.Start(new ProcessStartInfo("ms-settings:sound") { UseShellExecute = true });
-                }
-                catch
-                {
-                    // Fallback: Open classic Sound Control Panel
-                    Process.Start("rundll32.exe", "shell32.dll,Control_RunDLL mmsys.cpl,,0");
-                }
-            };
+        enumerator = new MMDeviceEnumerator();
+        ResolveDefaultMic();
 
-            // Setup the default audio device (input)
-            var enumerator = new MMDeviceEnumerator();
+        timer.Tick += (s, e) => ProcessCurrentVolume();
+        timer.Start();
 
-            // You can choose DefaultDevice or DefaultCommunicationsDevice depending on your preference:
-            defaultMic = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Console);
+        ProcessCurrentVolume();
 
-            // Set up a timer to update the tooltip
-            var timer = new System.Windows.Forms.Timer { Interval = 5 * 1000 }; // update every n seconds
-            timer.Tick += (s, e) =>
-            {
-                ProcessCurrentVolume();
-            };
-            timer.Start();
-
-            // kick off the initial volume check
-            ProcessCurrentVolume();
-
+        try
+        {
             Forms.Application.Run();
         }
-
-        static void ProcessCurrentVolume()
+        finally
         {
-            // if there's not a notifyIcon, we're done
-            if (notifyIcon == null) return;
+            Cleanup();
+        }
+    }
 
-            // if there's not a default mic, we're done
-            if (defaultMic == null)
-            {
-                notifyIcon.Text = "No input device found.";
-                return;
-            }
+    private static ContextMenuStrip CreateLegacyContextMenu()
+    {
+        var contextMenu = new ContextMenuStrip();
 
-            // Volume range is typically 0.0 to 1.0, multiply by 100 for percentage
-            float currentVolume = defaultMic.AudioEndpointVolume.MasterVolumeLevelScalar * 100f;
+        contextMenu.Items.Add(new ToolStripMenuItem("Exit", null, (s, e) => ExitApplication()));
+        contextMenu.Items.Add(new ToolStripMenuItem("80%", null, (s, e) => ResetMicrophoneVolume()));
 
-            Debug.WriteLine(previousVolume + " -> " + currentVolume);
+        return contextMenu;
+    }
 
-            // did the volume change?
-            if (previousVolume != currentVolume)
-            {
-                Debug.WriteLine("Volume changed");
-                previousVolumeChangeTimestamp = DateTime.Now;
-
-                notifyIcon.Icon = SystemIcons.Information;
-                notifyIcon.ShowBalloonTip(1000, "", $"Microphone volume is {(int)currentVolume}%", ToolTipIcon.None);
-
-                if (currentVolume < 100f)
-                {
-                    Debug.WriteLine("Volume < 100");
-
-                    // Render text using WPF
-                    Thread iconThread = new Thread(() =>
-                    {
-                        notifyIcon.Icon = CreateIconWithText(currentVolume);
-                    });
-
-                    iconThread.SetApartmentState(ApartmentState.STA);
-                    iconThread.Start();
-                }
-                else
-                {
-                    notifyIcon.Icon = null;
-                }
-            }
-
-            // otherwise, if the volume is below the threshold and it's been more than a minute, show the balloon tip again
-            else if (currentVolume < 75 && DateTime.Now.Subtract(previousVolumeChangeTimestamp).TotalMilliseconds > 30 * 1000)
-            {
-                notifyIcon.ShowBalloonTip(1000, "", $"Microphone volume is {(int)currentVolume}%", ToolTipIcon.Warning);
-                previousVolumeChangeTimestamp = DateTime.Now;
-            }
-
-            // update previousVolume
-            previousVolume = currentVolume;
+    private static AppSettings LoadAppSettings()
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+        if (!File.Exists(path))
+        {
+            return new AppSettings();
         }
 
-        static Icon CreateIconWithText(float currentVolume)
+        try
         {
-            int iconSize = 32;
-            int dpi = 96;
-
-            // red background if volume too low
-            var background = currentVolume < 75 ? new SolidColorBrush(Colors.Red) : null;
-
-            var textBlock = new TextBlock
-            {
-                Text = ((int)currentVolume).ToString(),
-                FontSize = 24, // Adjusted for visibility
-                FontWeight = FontWeights.Bold,
-                Foreground = new SolidColorBrush(Colors.White),
-                Background = background,
-                Width = iconSize,
-                Height = iconSize,
-                TextAlignment = TextAlignment.Center,
-                HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-
-            textBlock.Measure(new System.Windows.Size(iconSize, iconSize));
-            textBlock.Arrange(new Rect(0, 0, iconSize, iconSize));
-
-            var bitmap = new RenderTargetBitmap(iconSize, iconSize, dpi, dpi, PixelFormats.Pbgra32);
-            bitmap.Render(textBlock);
-
-            using (MemoryStream stream = new MemoryStream())
-            {
-                var encoder = new PngBitmapEncoder();
-                encoder.Frames.Add(BitmapFrame.Create(bitmap));
-                encoder.Save(stream);
-                using (Bitmap bmp = new Bitmap(stream))
+            var settings = JsonSerializer.Deserialize<AppSettings>(
+                File.ReadAllText(path),
+                new JsonSerializerOptions
                 {
-                    return Icon.FromHandle(bmp.GetHicon());
-                }
-            }
+                    PropertyNameCaseInsensitive = true,
+                    ReadCommentHandling = JsonCommentHandling.Skip,
+                    AllowTrailingCommas = true
+                });
+
+            return settings ?? new AppSettings();
         }
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
+        {
+            Debug.WriteLine(ex);
+            return new AppSettings();
+        }
+    }
+
+    private static void NotifyIcon_MouseUp(object? sender, MouseEventArgs e)
+    {
+        if (e.Button is MouseButtons.Left or MouseButtons.Right)
+        {
+            ShowModernTrayMenu();
+        }
+    }
+
+    private static void ShowModernTrayMenu()
+    {
+        if (trayMenuFlyout is { IsVisible: true })
+        {
+            trayMenuFlyout.CloseIfOpen();
+            return;
+        }
+
+        trayMenuFlyout = new TrayMenuFlyout(
+            ResetMicrophoneVolume,
+            OpenSoundSettings,
+            ExitApplication);
+        trayMenuFlyout.Closed += (sender, args) => trayMenuFlyout = null;
+        trayMenuFlyout.ShowNearTray(Forms.Cursor.Position, Forms.Screen.FromPoint(Forms.Cursor.Position));
+    }
+
+    private static void ResetMicrophoneVolume()
+    {
+        ResolveDefaultMic();
+        if (defaultMic == null)
+        {
+            return;
+        }
+
+        try
+        {
+            defaultMic.AudioEndpointVolume.MasterVolumeLevelScalar = ResetVolumeScalar;
+            ProcessCurrentVolume();
+        }
+        catch (COMException ex)
+        {
+            Debug.WriteLine(ex);
+            ResetDefaultMic();
+        }
+    }
+
+    private static void ExitApplication()
+    {
+        if (notifyIcon != null)
+        {
+            notifyIcon.Visible = false;
+        }
+
+        Forms.Application.Exit();
+    }
+
+    private static void OpenSoundSettings()
+    {
+        try
+        {
+            // Modern sound settings (Windows 10+)
+            Process.Start(new ProcessStartInfo("ms-settings:sound") { UseShellExecute = true });
+        }
+        catch
+        {
+            // Fallback: Open classic Sound Control Panel
+            Process.Start("rundll32.exe", "shell32.dll,Control_RunDLL mmsys.cpl,,0");
+        }
+    }
+
+    private static void ProcessCurrentVolume()
+    {
+        if (notifyIcon == null)
+        {
+            return;
+        }
+
+        ResolveDefaultMic();
+        if (defaultMic == null)
+        {
+            notifyIcon.Text = "No input device found.";
+            SetTrayIcon(SystemIcons.Warning);
+            previousVolume = null;
+            return;
+        }
+
+        float currentVolume;
+        try
+        {
+            currentVolume = defaultMic.AudioEndpointVolume.MasterVolumeLevelScalar * 100f;
+        }
+        catch (COMException ex)
+        {
+            Debug.WriteLine(ex);
+            ResetDefaultMic();
+            return;
+        }
+
+        notifyIcon.Text = $"Microphone volume is {(int)currentVolume}%";
+        Debug.WriteLine(previousVolume + " -> " + currentVolume);
+
+        if (previousVolume != currentVolume)
+        {
+            Debug.WriteLine("Volume changed");
+            previousVolumeChangeTimestamp = DateTime.Now;
+
+            notifyIcon.ShowBalloonTip(1000, NotificationTitle, $"Microphone volume is {(int)currentVolume}%", ToolTipIcon.None);
+            SetTrayIcon(currentVolume < 100f ? CreateIconWithText(currentVolume) : appIcon, ownsIcon: currentVolume < 100f);
+        }
+        else if (currentVolume < LowVolumeThresholdPercent &&
+            DateTime.Now.Subtract(previousVolumeChangeTimestamp).TotalMilliseconds > LowVolumeReminderMilliseconds)
+        {
+            notifyIcon.ShowBalloonTip(1000, NotificationTitle, $"Microphone volume is {(int)currentVolume}%", ToolTipIcon.Warning);
+            previousVolumeChangeTimestamp = DateTime.Now;
+        }
+
+        previousVolume = currentVolume;
+    }
+
+    private static void ResolveDefaultMic()
+    {
+        if (enumerator == null)
+        {
+            return;
+        }
+
+        MMDevice? currentDefaultMic = null;
+        try
+        {
+            currentDefaultMic = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Console);
+        }
+        catch (COMException ex)
+        {
+            Debug.WriteLine(ex);
+        }
+
+        if (currentDefaultMic == null)
+        {
+            ResetDefaultMic();
+            return;
+        }
+
+        if (currentDefaultMic.ID == defaultMicId)
+        {
+            currentDefaultMic.Dispose();
+            return;
+        }
+
+        ResetDefaultMic();
+        defaultMic = currentDefaultMic;
+        defaultMicId = currentDefaultMic.ID;
+        previousVolume = null;
+    }
+
+    private static void ResetDefaultMic()
+    {
+        defaultMic?.Dispose();
+        defaultMic = null;
+        defaultMicId = null;
+    }
+
+    private static void SetTrayIcon(Icon? icon, bool ownsIcon = false)
+    {
+        if (notifyIcon == null)
+        {
+            if (ownsIcon)
+            {
+                icon?.Dispose();
+            }
+
+            return;
+        }
+
+        var previousOwnedIcon = ownedTrayIcon;
+        notifyIcon.Icon = icon;
+        ownedTrayIcon = ownsIcon ? icon : null;
+        previousOwnedIcon?.Dispose();
+    }
+
+    private static Icon CreateAppIcon()
+    {
+        return Icon.ExtractAssociatedIcon(Forms.Application.ExecutablePath) ?? (Icon)SystemIcons.Application.Clone();
+    }
+
+    private static Icon CreateIconWithText(float currentVolume)
+    {
+        const int iconSize = 32;
+        const int dpi = 96;
+
+        var background = currentVolume < LowVolumeThresholdPercent ? new SolidColorBrush(Colors.Red) : null;
+
+        var textBlock = new TextBlock
+        {
+            Text = ((int)currentVolume).ToString(),
+            FontSize = 24,
+            FontWeight = FontWeights.Bold,
+            Foreground = new SolidColorBrush(Colors.White),
+            Background = background,
+            Width = iconSize,
+            Height = iconSize,
+            TextAlignment = TextAlignment.Center,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        textBlock.Measure(new System.Windows.Size(iconSize, iconSize));
+        textBlock.Arrange(new Rect(0, 0, iconSize, iconSize));
+
+        var bitmap = new RenderTargetBitmap(iconSize, iconSize, dpi, dpi, PixelFormats.Pbgra32);
+        bitmap.Render(textBlock);
+
+        using var stream = new MemoryStream();
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        encoder.Save(stream);
+        stream.Position = 0;
+
+        using var bmp = new Bitmap(stream);
+        var hIcon = bmp.GetHicon();
+        try
+        {
+            using var icon = Icon.FromHandle(hIcon);
+            return (Icon)icon.Clone();
+        }
+        finally
+        {
+            DestroyIcon(hIcon);
+        }
+    }
+
+    private static void Cleanup()
+    {
+        if (notifyIcon != null)
+        {
+            notifyIcon.Visible = false;
+            notifyIcon.Dispose();
+            notifyIcon = null;
+        }
+
+        trayMenuFlyout?.CloseIfOpen();
+        trayMenuFlyout = null;
+        ownedTrayIcon?.Dispose();
+        ownedTrayIcon = null;
+        appIcon?.Dispose();
+        appIcon = null;
+        ResetDefaultMic();
+        enumerator?.Dispose();
+        enumerator = null;
+    }
+
+    private sealed class AppSettings
+    {
+        public bool UseModernTrayMenu { get; init; } = true;
     }
 }

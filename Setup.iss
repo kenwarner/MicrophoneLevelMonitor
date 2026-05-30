@@ -6,6 +6,8 @@
 #define MyAppPublisher "Ken Warner"
 #define MyAppURL "https://www.kenwarner.com/"
 #define MyAppExeName "MicrophoneLevelMonitor.exe"
+#define MyAppIconName "Assets\app-icon.ico"
+#define MyAppUserModelID "MicrophoneLevelMonitor"
 
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application. Do not use the same AppId value in installers for other applications.
@@ -13,6 +15,7 @@
 AppId={{AF648ED7-1F0E-4A2B-B919-8521846E83A1}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
+AppMutex=MicrophoneLevelMonitor-AF648ED7-1F0E-4A2B-B919-8521846E83A1
 ;AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
@@ -20,7 +23,8 @@ AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 DefaultDirName={autopf}\{#MyAppName}
 DisableDirPage=yes
-UninstallDisplayIcon={app}\{#MyAppExeName}
+UninstallDisplayIcon={app}\{#MyAppIconName}
+SetupIconFile=MicrophoneLevelMonitor\Assets\app-icon.ico
 ; "ArchitecturesAllowed=x64compatible" specifies that Setup cannot run
 ; on anything but x64 and Windows 11 on Arm.
 ArchitecturesAllowed=x64compatible
@@ -43,16 +47,15 @@ WizardStyle=modern
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
-Source: "MicrophoneLevelMonitor\bin\Release\net9.0-windows\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "MicrophoneLevelMonitor\bin\Release\net9.0-windows\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "MicrophoneLevelMonitor\bin\Release\net10.0-windows\win-x64\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Tasks]
 Name: startup; Description: "Automatically start on login"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Icons]
-Name: "{userstartup}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: startup
-Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+Name: "{userstartup}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppIconName}"; AppUserModelID: "{#MyAppUserModelID}"; Tasks: startup
+Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppIconName}"; AppUserModelID: "{#MyAppUserModelID}"
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent

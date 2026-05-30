@@ -2,15 +2,41 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net9.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <ApplicationIcon>Assets\app-icon.ico</ApplicationIcon>
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <InnoSetupCompiler Condition="'$(InnoSetupCompiler)' == '' and Exists('C:\Program Files (x86)\Inno Setup 6\ISCC.exe')">C:\Program Files (x86)\Inno Setup 6\ISCC.exe</InnoSetupCompiler>
+    <InnoSetupCompiler Condition="'$(InnoSetupCompiler)' == '' and Exists('C:\Program Files\Inno Setup 6\ISCC.exe')">C:\Program Files\Inno Setup 6\ISCC.exe</InnoSetupCompiler>
+  </PropertyGroup>
+
   <ItemGroup>
-    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="NAudio" Version="2.3.0" />
   </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Assets\app-icon.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+
+  <Target Name="CompileInstallerOnReleaseBuild" AfterTargets="Build" Condition="'$(Configuration)' == 'Release' and '$(CompileInstaller)' == 'true'">
+    <Error Condition="'$(InnoSetupCompiler)' == ''" Text="Inno Setup compiler was not found. Install Inno Setup 6 or pass /p:InnoSetupCompiler=&quot;C:\Path\To\ISCC.exe&quot;." />
+    <Message Importance="high" Text="Publishing self-contained Release output for the installer..." />
+    <Exec Command="dotnet publish &quot;$(MSBuildProjectFullPath)&quot; --configuration $(Configuration) --no-build /p:CompileInstaller=false" />
+    <Message Importance="high" Text="Compiling installer with Inno Setup..." />
+    <Exec Command="&quot;$(InnoSetupCompiler)&quot; &quot;$(MSBuildProjectDirectory)\..\Setup.iss&quot;" WorkingDirectory="$(MSBuildProjectDirectory)\.." />
+  </Target>
 
 </Project>

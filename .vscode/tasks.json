@@ -1,0 +1,49 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "${workspaceFolder}/MicrophoneLevelMonitor.sln"
+      ],
+      "problemMatcher": "$msCompile",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "build release",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "${workspaceFolder}/MicrophoneLevelMonitor.sln",
+        "--configuration",
+        "Release",
+        "/p:CompileInstaller=false"
+      ],
+      "problemMatcher": "$msCompile",
+      "group": "build"
+    },
+    {
+      "label": "build installer",
+      "type": "process",
+      "command": "dotnet",
+      "dependsOn": "build release",
+      "dependsOrder": "sequence",
+      "args": [
+        "msbuild",
+        "${workspaceFolder}/MicrophoneLevelMonitor/MicrophoneLevelMonitor.csproj",
+        "/target:CompileInstallerOnReleaseBuild",
+        "/property:Configuration=Release",
+        "/property:CompileInstaller=true"
+      ],
+      "problemMatcher": "$msCompile",
+      "group": "build"
+    }
+  ]
+}
