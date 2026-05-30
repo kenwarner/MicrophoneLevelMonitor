@@ -2,7 +2,20 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "build",
+      "label": "Debug build",
+      "type": "dotnet",
+      "task": "build",
+      "file": "d:\\projects\\MicrophoneLevelMonitor\\MicrophoneLevelMonitor\\MicrophoneLevelMonitor.csproj",
+      "problemMatcher": "$msCompile",
+      "presentation": {
+        "reveal": "silent",
+        "showReuseMessage": false,
+        "close": true
+      },
+      "hide": true
+    },
+    {
+      "label": "build debug",
       "type": "process",
       "command": "dotnet",
       "args": [

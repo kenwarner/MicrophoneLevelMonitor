@@ -6,11 +6,28 @@
       "type": "dotnet",
       "request": "launch",
       "projectPath": "${workspaceFolder}/MicrophoneLevelMonitor/MicrophoneLevelMonitor.csproj",
-      "preLaunchTask": "build",
+      "preLaunchTask": "build debug",
       "console": "internalConsole",
       "internalConsoleOptions": "neverOpen",
       "logging": {
         "moduleLoad": false
+      }
+    },
+    {
+      "name": "Installer",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build installer",
+      "program": "dotnet",
+      "args": [
+        "--version"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "internalConsole",
+      "internalConsoleOptions": "neverOpen",
+      "logging": {
+        "moduleLoad": false,
+        "programOutput": false
       }
     }
   ]
