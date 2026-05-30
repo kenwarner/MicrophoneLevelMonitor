@@ -110,7 +110,10 @@ static class Program
 
     private static ContextMenuStrip CreateLegacyContextMenu()
     {
-        var contextMenu = new ContextMenuStrip();
+        var contextMenu = new ContextMenuStrip
+        {
+            Renderer = new TrayMenuRenderer()
+        };
 
         contextMenu.Items.Add(new ToolStripMenuItem("Exit", null, (s, e) => ExitApplication()));
         contextMenu.Items.Add(new ToolStripMenuItem("80%", null, (s, e) => ResetMicrophoneVolume()));
@@ -397,5 +400,28 @@ static class Program
     private sealed class AppSettings
     {
         public bool UseModernTrayMenu { get; init; } = true;
+    }
+
+    private sealed class TrayMenuRenderer : ToolStripProfessionalRenderer
+    {
+        public TrayMenuRenderer()
+            : base(new TrayMenuColorTable())
+        {
+        }
+    }
+
+    private sealed class TrayMenuColorTable : ProfessionalColorTable
+    {
+        private static readonly System.Drawing.Color Hover = System.Drawing.Color.FromArgb(231, 231, 231);
+        private static readonly System.Drawing.Color Pressed = System.Drawing.Color.FromArgb(218, 218, 218);
+        private static readonly System.Drawing.Color Border = System.Drawing.Color.FromArgb(196, 196, 196);
+
+        public override System.Drawing.Color MenuItemBorder => Border;
+        public override System.Drawing.Color MenuItemPressedGradientBegin => Pressed;
+        public override System.Drawing.Color MenuItemPressedGradientEnd => Pressed;
+        public override System.Drawing.Color MenuItemPressedGradientMiddle => Pressed;
+        public override System.Drawing.Color MenuItemSelected => Hover;
+        public override System.Drawing.Color MenuItemSelectedGradientBegin => Hover;
+        public override System.Drawing.Color MenuItemSelectedGradientEnd => Hover;
     }
 }

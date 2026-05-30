@@ -98,9 +98,6 @@ internal sealed class TrayMenuFlyout : Window
     {
         var button = new WpfButton
         {
-            Background = Media.Brushes.Transparent,
-            BorderBrush = Media.Brushes.Transparent,
-            BorderThickness = new Thickness(0),
             Content = new TextBlock
             {
                 Text = label,
@@ -234,8 +231,8 @@ internal sealed class TrayMenuFlyout : Window
                 Background = Brush(32, 33, 36);
                 Border = Brush(64, 67, 72);
                 Text = Brush(232, 234, 237);
-                Hover = Brush(48, 49, 52);
-                Pressed = Brush(58, 59, 63);
+                Hover = Brush(64, 64, 64);
+                Pressed = Brush(78, 78, 78);
                 Separator = Brush(64, 67, 72);
                 ShadowOpacity = 0.36;
             }
@@ -244,8 +241,8 @@ internal sealed class TrayMenuFlyout : Window
                 Background = Brush(250, 250, 250);
                 Border = Brush(213, 217, 222);
                 Text = Brush(31, 35, 40);
-                Hover = Brush(239, 241, 244);
-                Pressed = Brush(226, 230, 235);
+                Hover = Brush(231, 231, 231);
+                Pressed = Brush(218, 218, 218);
                 Separator = Brush(225, 229, 234);
                 ShadowOpacity = 0.18;
             }
