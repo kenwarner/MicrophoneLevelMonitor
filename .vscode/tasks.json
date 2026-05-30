@@ -11,6 +11,8 @@
       ],
       "problemMatcher": "$msCompile",
       "presentation": {
+        "reveal": "silent",
+        "showReuseMessage": false,
         "close": true
       },
       "group": {
@@ -31,6 +33,8 @@
       ],
       "problemMatcher": "$msCompile",
       "presentation": {
+        "reveal": "silent",
+        "showReuseMessage": false,
         "close": true
       },
       "group": "build"
@@ -50,6 +54,8 @@
       ],
       "problemMatcher": "$msCompile",
       "presentation": {
+        "reveal": "silent",
+        "showReuseMessage": false,
         "close": true
       },
       "group": "build"

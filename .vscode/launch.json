@@ -6,16 +6,12 @@
       "type": "dotnet",
       "request": "launch",
       "projectPath": "${workspaceFolder}/MicrophoneLevelMonitor/MicrophoneLevelMonitor.csproj",
+      "preLaunchTask": "build",
+      "console": "internalConsole",
+      "internalConsoleOptions": "neverOpen",
       "logging": {
         "moduleLoad": false
       }
-    },
-    {
-      "name": "Installer",
-      "type": "node-terminal",
-      "request": "launch",
-      "preLaunchTask": "build installer",
-      "command": "exit"
     }
   ]
 }
