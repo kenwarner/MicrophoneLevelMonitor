@@ -15,7 +15,6 @@
 AppId={{AF648ED7-1F0E-4A2B-B919-8521846E83A1}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-AppMutex=MicrophoneLevelMonitor-AF648ED7-1F0E-4A2B-B919-8521846E83A1
 ;AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}

@@ -15,7 +15,7 @@
       "type": "node-terminal",
       "request": "launch",
       "preLaunchTask": "build installer",
-      "command": "echo Installer build complete."
+      "command": "exit"
     }
   ]
 }
