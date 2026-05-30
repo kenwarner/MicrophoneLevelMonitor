@@ -10,6 +10,9 @@
         "${workspaceFolder}/MicrophoneLevelMonitor.sln"
       ],
       "problemMatcher": "$msCompile",
+      "presentation": {
+        "close": true
+      },
       "group": {
         "kind": "build",
         "isDefault": true
@@ -27,6 +30,9 @@
         "/p:CompileInstaller=false"
       ],
       "problemMatcher": "$msCompile",
+      "presentation": {
+        "close": true
+      },
       "group": "build"
     },
     {
@@ -43,6 +49,9 @@
         "/property:CompileInstaller=true"
       ],
       "problemMatcher": "$msCompile",
+      "presentation": {
+        "close": true
+      },
       "group": "build"
     }
   ]
