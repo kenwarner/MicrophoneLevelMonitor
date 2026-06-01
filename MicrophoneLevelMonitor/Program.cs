@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Windows;
@@ -19,7 +20,7 @@ static class Program
     private const int PollIntervalMilliseconds = 5 * 1000;
     private const int LowVolumeReminderMilliseconds = 30 * 1000;
     private const float LowVolumeThresholdPercent = 75f;
-    private const float ResetVolumeScalar = 0.805f;
+    private const float ResetVolumeScalar = 0.80f;
 
     private static float? previousVolume;
     private static DateTime previousVolumeChangeTimestamp;
@@ -39,6 +40,9 @@ static class Program
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool DestroyIcon(IntPtr hIcon);
+
+    [DllImport("shell32.dll", PreserveSig = true)]
+    private static extern int Shell_NotifyIconGetRect(ref NotifyIconIdentifier identifier, out ShellRect iconLocation);
 
     /// <summary>
     ///  The main entry point for the application.
@@ -170,7 +174,97 @@ static class Program
             OpenSoundSettings,
             ExitApplication);
         trayMenuFlyout.Closed += (sender, args) => trayMenuFlyout = null;
+
+        if (notifyIcon != null && TryGetNotifyIconBounds(notifyIcon, out var iconBounds))
+        {
+            trayMenuFlyout.ShowNearTrayIcon(iconBounds);
+            return;
+        }
+
+        Debug.WriteLine("Unable to resolve tray icon bounds. Falling back to cursor-based tray menu placement.");
         trayMenuFlyout.ShowNearTray(Forms.Cursor.Position, Forms.Screen.FromPoint(Forms.Cursor.Position));
+    }
+
+    private static bool TryGetNotifyIconBounds(NotifyIcon icon, out System.Drawing.Rectangle bounds)
+    {
+        bounds = default;
+
+        const BindingFlags Flags = BindingFlags.Instance | BindingFlags.NonPublic;
+        var notifyIconType = typeof(NotifyIcon);
+        var idField = notifyIconType.GetField("_id", Flags);
+        var windowField = notifyIconType.GetField("_window", Flags);
+
+        if (!TryGetNotifyIconId(idField?.GetValue(icon), out var id) ||
+            windowField?.GetValue(icon) is not { } window)
+        {
+            Debug.WriteLine("Unable to read NotifyIcon internals for tray icon bounds.");
+            return false;
+        }
+
+        var handle = GetNotifyIconWindowHandle(window);
+        if (handle == IntPtr.Zero)
+        {
+            Debug.WriteLine("Unable to read NotifyIcon window handle for tray icon bounds.");
+            return false;
+        }
+
+        var identifier = new NotifyIconIdentifier
+        {
+            Size = Marshal.SizeOf<NotifyIconIdentifier>(),
+            WindowHandle = handle,
+            Id = id,
+            GuidItem = Guid.Empty
+        };
+
+        var result = Shell_NotifyIconGetRect(ref identifier, out var iconLocation);
+        if (result != 0)
+        {
+            Debug.WriteLine($"Shell_NotifyIconGetRect failed with HRESULT 0x{unchecked((uint)result):X8}.");
+            return false;
+        }
+
+        if (iconLocation.Right <= iconLocation.Left || iconLocation.Bottom <= iconLocation.Top)
+        {
+            Debug.WriteLine("Shell_NotifyIconGetRect returned an empty tray icon rectangle.");
+            return false;
+        }
+
+        bounds = System.Drawing.Rectangle.FromLTRB(
+            iconLocation.Left,
+            iconLocation.Top,
+            iconLocation.Right,
+            iconLocation.Bottom);
+        return true;
+    }
+
+    private static bool TryGetNotifyIconId(object? value, out uint id)
+    {
+        switch (value)
+        {
+            case uint uintId:
+                id = uintId;
+                return true;
+            case int intId when intId >= 0:
+                id = unchecked((uint)intId);
+                return true;
+            default:
+                id = 0;
+                return false;
+        }
+    }
+
+    private static IntPtr GetNotifyIconWindowHandle(object window)
+    {
+        if (window is Forms.NativeWindow nativeWindow)
+        {
+            return nativeWindow.Handle;
+        }
+
+        var handleProperty = window.GetType().GetProperty(
+            "Handle",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+        return handleProperty?.GetValue(window) is IntPtr handle ? handle : IntPtr.Zero;
     }
 
     private static void ResetMicrophoneVolume()
@@ -400,6 +494,24 @@ static class Program
     private sealed class AppSettings
     {
         public bool UseModernTrayMenu { get; init; } = true;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NotifyIconIdentifier
+    {
+        public int Size;
+        public IntPtr WindowHandle;
+        public uint Id;
+        public Guid GuidItem;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ShellRect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
     }
 
     private sealed class TrayMenuRenderer : ToolStripProfessionalRenderer

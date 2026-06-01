@@ -16,10 +16,12 @@ namespace MicrophoneLevelMonitor;
 
 internal sealed class TrayMenuFlyout : Window
 {
-    private const double MenuWidth = 178;
-    private const double MenuItemHeight = 26;
-    private const double HorizontalOffset = -22;
-    private const double VerticalOffset = -22;
+    private const double MenuWidth = 238;
+    private const double MenuItemHeight = 24;
+    private const double CursorHorizontalOffset = 36;
+    private const double TrayIconHorizontalOffset = -10;
+    private const double TrayIconVerticalOffset = 2;
+    private const double ChromePadding = 8;
     private const double ScreenMargin = 8;
     private bool isClosing;
 
@@ -43,7 +45,7 @@ internal sealed class TrayMenuFlyout : Window
             }
         };
 
-        Content = CreateContent(setVolume, openSoundSettings, exitApplication);
+        Content = CreateChrome(CreateContent(setVolume, openSoundSettings, exitApplication));
     }
 
     public void ShowNearTray(System.Drawing.Point cursorPosition, Forms.Screen screen)
@@ -66,7 +68,54 @@ internal sealed class TrayMenuFlyout : Window
         Top = y;
     }
 
-    private static Border CreateContent(Action setVolume, Action openSoundSettings, Action exitApplication)
+    public void ShowNearTrayIcon(System.Drawing.Rectangle iconBounds)
+    {
+        Left = -10000;
+        Top = -10000;
+        Show();
+        Activate();
+        UpdateLayout();
+
+        var workingArea = ToDeviceIndependentRect(Forms.Screen.FromRectangle(iconBounds).WorkingArea);
+        var icon = ToDeviceIndependentRect(iconBounds);
+        var width = ActualWidth > 0 ? ActualWidth : MenuWidth;
+        var height = ActualHeight;
+
+        var x = GetIconHorizontalPosition(workingArea, icon, width);
+        var y = GetIconVerticalPosition(workingArea, icon, height);
+
+        Left = x;
+        Top = y;
+    }
+
+    private static Border CreateChrome(UIElement child)
+    {
+        var palette = ThemePalette.Current();
+
+        return new Border
+        {
+            Background = Media.Brushes.Transparent,
+            Padding = new Thickness(ChromePadding),
+            Child = new Border
+            {
+                Background = palette.Background,
+                BorderBrush = palette.Border,
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(7),
+                Effect = new DropShadowEffect
+                {
+                    BlurRadius = 16,
+                    Direction = 270,
+                    Opacity = palette.ShadowOpacity,
+                    ShadowDepth = 3,
+                    Color = Media.Colors.Black
+                },
+                Child = child
+            }
+        };
+    }
+
+    private static StackPanel CreateContent(Action setVolume, Action openSoundSettings, Action exitApplication)
     {
         var palette = ThemePalette.Current();
         var panel = new StackPanel
@@ -79,22 +128,7 @@ internal sealed class TrayMenuFlyout : Window
         panel.Children.Add(CreateSeparator(palette));
         panel.Children.Add(CreateMenuButton("Exit", exitApplication, palette));
 
-        return new Border
-        {
-            Background = palette.Background,
-            BorderBrush = palette.Border,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(7),
-            Effect = new DropShadowEffect
-            {
-                BlurRadius = 16,
-                Direction = 270,
-                Opacity = palette.ShadowOpacity,
-                ShadowDepth = 3,
-                Color = Media.Colors.Black
-            },
-            Child = panel
-        };
+        return panel;
     }
 
     private static WpfButton CreateMenuButton(string label, Action action, ThemePalette palette)
@@ -208,17 +242,31 @@ internal sealed class TrayMenuFlyout : Window
 
     private double GetVerticalPosition(Rect workingArea, WpfPoint cursor, double height)
     {
-        var y = cursor.Y - height - ScreenMargin + VerticalOffset;
+        var y = cursor.Y - height - ScreenMargin;
         return Math.Clamp(y, workingArea.Top + ScreenMargin, workingArea.Bottom - height - ScreenMargin);
     }
 
     private static double GetHorizontalPosition(Rect workingArea, WpfPoint cursor, double width)
     {
-        var leftEdge = cursor.X + HorizontalOffset;
+        var leftEdge = cursor.X - width + CursorHorizontalOffset;
         var minLeft = workingArea.Left + ScreenMargin;
         var maxLeft = workingArea.Right - width - ScreenMargin;
 
         return Math.Clamp(leftEdge, minLeft, maxLeft);
+    }
+
+    private static double GetIconHorizontalPosition(Rect workingArea, Rect icon, double width)
+    {
+        var minLeft = workingArea.Left + ScreenMargin;
+        var maxLeft = workingArea.Right - width - ScreenMargin;
+
+        return Math.Clamp(icon.Left + TrayIconHorizontalOffset, minLeft, maxLeft);
+    }
+
+    private static double GetIconVerticalPosition(Rect workingArea, Rect icon, double height)
+    {
+        var y = icon.Top - height - ScreenMargin + TrayIconVerticalOffset;
+        return Math.Clamp(y, workingArea.Top + ScreenMargin, workingArea.Bottom - height - ScreenMargin);
     }
 
     private Rect ToDeviceIndependentRect(System.Drawing.Rectangle rectangle)
