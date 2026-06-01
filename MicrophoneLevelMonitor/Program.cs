@@ -339,7 +339,8 @@ static class Program
             return;
         }
 
-        notifyIcon.Text = $"Microphone volume is {(int)currentVolume}%";
+        var displayVolume = GetDisplayVolumePercent(currentVolume);
+        notifyIcon.Text = $"Microphone volume is {displayVolume}%";
         Debug.WriteLine(previousVolume + " -> " + currentVolume);
 
         if (previousVolume != currentVolume)
@@ -347,13 +348,13 @@ static class Program
             Debug.WriteLine("Volume changed");
             previousVolumeChangeTimestamp = DateTime.Now;
 
-            notifyIcon.ShowBalloonTip(1000, NotificationTitle, $"Microphone volume is {(int)currentVolume}%", ToolTipIcon.None);
-            SetTrayIcon(currentVolume < 100f ? CreateIconWithText(currentVolume) : appIcon, ownsIcon: currentVolume < 100f);
+            notifyIcon.ShowBalloonTip(1000, NotificationTitle, $"Microphone volume is {displayVolume}%", ToolTipIcon.None);
+            SetTrayIcon(displayVolume < 100 ? CreateIconWithText(displayVolume, currentVolume) : appIcon, ownsIcon: displayVolume < 100);
         }
         else if (currentVolume < LowVolumeThresholdPercent &&
             DateTime.Now.Subtract(previousVolumeChangeTimestamp).TotalMilliseconds > LowVolumeReminderMilliseconds)
         {
-            notifyIcon.ShowBalloonTip(1000, NotificationTitle, $"Microphone volume is {(int)currentVolume}%", ToolTipIcon.Warning);
+            notifyIcon.ShowBalloonTip(1000, NotificationTitle, $"Microphone volume is {displayVolume}%", ToolTipIcon.Warning);
             previousVolumeChangeTimestamp = DateTime.Now;
         }
 
@@ -425,7 +426,12 @@ static class Program
         return Icon.ExtractAssociatedIcon(Forms.Application.ExecutablePath) ?? (Icon)SystemIcons.Application.Clone();
     }
 
-    private static Icon CreateIconWithText(float currentVolume)
+    private static int GetDisplayVolumePercent(float currentVolume)
+    {
+        return (int)Math.Round(currentVolume, MidpointRounding.AwayFromZero);
+    }
+
+    private static Icon CreateIconWithText(int displayVolume, float currentVolume)
     {
         const int iconSize = 32;
         const int dpi = 96;
@@ -434,7 +440,7 @@ static class Program
 
         var textBlock = new TextBlock
         {
-            Text = ((int)currentVolume).ToString(),
+            Text = displayVolume.ToString(),
             FontSize = 24,
             FontWeight = FontWeights.Bold,
             Foreground = new SolidColorBrush(Colors.White),
